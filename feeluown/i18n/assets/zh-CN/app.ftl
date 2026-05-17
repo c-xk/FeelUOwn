@@ -682,3 +682,9 @@ track-skip-to-next = 未找到可用的播放链接，播放下一首...
 ## errorMessage: [string]
 provider-missing-feature = { -provider(capitalization: "uppercase") }不支持该功能: { $errorMessage }
 provider-network-error = 请求失败: { $errorMessage }
+
+## Proxy detection alert
+## $proxyInfo: proxy settings description
+proxy-detected = 检测到系统代理: { $proxyInfo }
+proxy-not-detected = 未检测到代理
+proxy-click-to-refresh = 点击刷新

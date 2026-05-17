@@ -31,7 +31,10 @@ class GuiApp(App, QWidget):
         # macOS: must initialize QApplication before constructing a pixmap object.
         # Arch Linux: it may core if QApplication is initialized here.
         if sys.platform == 'darwin':
-            GuiApp.__q_app = QApplication(['FeelUOwn'])
+            qapp = QApplication.instance()
+            if qapp is None:
+                qapp = QApplication(['FeelUOwn'])
+            GuiApp.__q_app = qapp
         # Set desktopFileName so that the window icon is properly shown under wayland.
         # I don't know if this setting brings other benefits or not.
         # https://github.com/pyfa-org/Pyfa/issues/1607#issuecomment-392099878

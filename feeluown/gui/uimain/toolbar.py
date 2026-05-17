@@ -9,8 +9,9 @@ from feeluown.gui.widgets import (
     SearchSwitchButton,
     SettingsButton,
 )
+from feeluown.gui.components import NetworkStatusButton
 from feeluown.gui.widgets.magicbox import MagicBox
-from feeluown.gui.widgets.statusline import StatusLine
+from feeluown.gui.widgets.statusline import StatusLine, StatusLineItem
 from feeluown.i18n import t
 
 if TYPE_CHECKING:
@@ -44,6 +45,10 @@ class BottomPanel(QWidget):
         self._stack_switch.hide()
 
         self.status_line = StatusLine(self._app)
+        self.network_status_button = NetworkStatusButton(length=ButtonSize[0])
+        self.status_line.add_item(
+            StatusLineItem("network-status", self.network_status_button)
+        )
         self.settings_btn = SettingsButton(length=ButtonSize[0])
 
         # initialize widgets

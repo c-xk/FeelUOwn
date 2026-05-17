@@ -9,6 +9,7 @@ from collections import OrderedDict
 from copy import copy, deepcopy
 from functools import wraps
 from itertools import filterfalse
+import urllib.request
 
 from feeluown.i18n import human_readable_number
 
@@ -237,3 +238,18 @@ def int_to_human_readable(i: int) -> str:
         stacklevel=2,
     )
     return human_readable_number(n=i)
+
+
+def detect_proxy() -> dict:
+    """
+    Detect system proxy settings.
+
+    :return: Dict of proxies read from system, or empty dict if no proxy detected.
+    """
+    try:
+        proxies = urllib.request.getproxies()
+    except Exception:
+        proxies = {}
+    # getproxies may include a 'no' key from NO_PROXY; it is not a real proxy.
+    proxies.pop("no", None)
+    return proxies
