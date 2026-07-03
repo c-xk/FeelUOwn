@@ -117,22 +117,23 @@ class PreloadManager:
             self._preloaded_media = media
 
             try:
+                self._preloaded_metadata = (
+                    await self._playlist._metadata_mgr.prepare_for_song(song)
+                )
+            except Exception:
+                self._preloaded_metadata = None
+
+            try:
                 kwargs = {}
                 if not self._playlist._app.has_gui:
                     kwargs["video"] = False
+                kwargs["metadata"] = self._preloaded_metadata
                 queued_id = self._playlist._app.player.queue_media(
                     media, **kwargs
                 )
                 self._preloaded_queued_id = queued_id
             except Exception:
                 logger.debug("queue next media into mpv failed", exc_info=True)
-
-            try:
-                self._preloaded_metadata = (
-                    await self._playlist._metadata_mgr.prepare_for_song(song)
-                )
-            except Exception:
-                self._preloaded_metadata = None
         finally:
             if self._preloading_song == song:
                 self._preloading_song = None

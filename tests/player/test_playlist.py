@@ -557,7 +557,7 @@ async def test_preload_next_song_queues_media_and_sets_state(
     assert playlist._preload_mgr._preloaded_metadata == metadata
     assert playlist._preload_mgr._preloaded_queued_id == 42
     assert playlist._preload_mgr._preloading_song is None
-    app_mock.player.queue_media.assert_called_once_with(media)
+    app_mock.player.queue_media.assert_called_once_with(media, metadata=metadata)
 
 
 @pytest.mark.asyncio
@@ -691,14 +691,15 @@ def test_on_media_finished_calls_next_when_auto_advance_not_done(
 
 
 @pytest.mark.asyncio
-async def test_a_set_current_song_returns_early_when_already_current(
+async def test_a_set_current_song_returns_early_when_auto_advance_done(
     app_mock, song, song1, mocker
 ):
     app_mock.config.ENABLE_MV_AS_STANDBY = 0
     playlist = Playlist(app_mock)
     playlist.add(song)
     playlist.add(song1)
-    playlist._current_song = song1
+    playlist._current_song = song
+    playlist._auto_advance_done = True
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
@@ -706,5 +707,6 @@ async def test_a_set_current_song_returns_early_when_already_current(
     result = await playlist.a_set_current_song(song1)
 
     assert result is None
+    assert playlist._auto_advance_done is False
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()

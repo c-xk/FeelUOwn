@@ -721,9 +721,8 @@ class Playlist:
         if self.mode is PlaylistMode.fm and song not in self._queue:
             self.mode = PlaylistMode.normal
 
-        # When mpv already auto-advanced to *song* via queued_media_activated,
-        # current_song is already set and media is already playing.
-        if song == self._current_song:
+        if self._auto_advance_done:
+            self._auto_advance_done = False
             return None
 
         target_song = song  # The song to be set.
