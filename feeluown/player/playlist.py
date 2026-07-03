@@ -110,9 +110,10 @@ class Playlist:
         self._metadata_mgr = MetadataAssembler(app)
         self._preload_mgr = PreloadManager(self)
 
-        # True when mpv auto-advanced to a queued item (via queued_media_activated).
-        # When set, _on_media_finished skips next() to avoid double-advancing.
-        self._auto_advance_done = False
+        # ids of songs that were auto-advanced via queued_media_activated.
+        # a_set_current_song for a song in this set returns early; the set
+        # survives back-to-back auto-advances regardless of task scheduling.
+        self._auto_advanced_ids: set[int] = set()
 
         #: init playlist mode normal
         self._mode = PlaylistMode.normal
@@ -647,12 +648,9 @@ class Playlist:
             return self._next_no_lock()
 
     def _on_media_finished(self):
-        # When mpv auto-advanced to a queued item, current_song is already
-        # set by _on_queued_media_activated — skip next() to avoid skipping
-        # a track.
-        if self._auto_advance_done:
-            self._auto_advance_done = False
-            return
+        # Always call next() — the a_set_current_song task will return
+        # early if the song was already auto-advanced (see
+        # _auto_advanced_ids check).
         self.next()
 
     def _on_queued_media_activated(self, queued_id, media, metadata):
@@ -660,7 +658,7 @@ class Playlist:
         song = self._preload_mgr.pop_song_for_queued_id(queued_id)
         if song is None:
             return
-        self._auto_advance_done = True
+        self._auto_advanced_ids.add(id(song))
         with self._queue_lock:
             # If _on_media_finished -> next() already set _current_song, it
             # should be the same song; we still emit song_changed so that
@@ -721,8 +719,8 @@ class Playlist:
         if self.mode is PlaylistMode.fm and song not in self._queue:
             self.mode = PlaylistMode.normal
 
-        if song == self._current_song and self._auto_advance_done:
-            self._auto_advance_done = False
+        if id(song) in self._auto_advanced_ids:
+            self._auto_advanced_ids.discard(id(song))
             return None
 
         target_song = song  # The song to be set.

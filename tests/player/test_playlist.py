@@ -651,30 +651,12 @@ def test_on_queued_media_activated_sets_current_song(
 
     playlist._on_queued_media_activated(5, media, {'k': 'v'})
 
-    assert playlist._auto_advance_done is True
+    assert id(song1) in playlist._auto_advanced_ids
     assert playlist._current_song == song1
     assert mgr._preloaded_song is None
 
 
-def test_on_media_finished_skips_next_when_auto_advance_done(
-    app_mock, song, song1, mocker
-):
-    app_mock.config.ENABLE_MV_AS_STANDBY = 0
-    playlist = Playlist(app_mock)
-    playlist.add(song)
-    playlist.add(song1)
-    playlist._current_song = song
-
-    playlist._auto_advance_done = True
-    mock_next = mocker.patch.object(Playlist, 'next')
-
-    playlist._on_media_finished()
-
-    assert playlist._auto_advance_done is False
-    mock_next.assert_not_called()
-
-
-def test_on_media_finished_calls_next_when_auto_advance_not_done(
+def test_on_media_finished_calls_next(
     app_mock, song, song1, mocker
 ):
     app_mock.config.ENABLE_MV_AS_STANDBY = 0
@@ -699,7 +681,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     playlist.add(song)
     playlist.add(song1)
     playlist._current_song = song1
-    playlist._auto_advance_done = True
+    playlist._auto_advanced_ids.add(id(song1))
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
@@ -707,7 +689,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     result = await playlist.a_set_current_song(song1)
 
     assert result is None
-    assert playlist._auto_advance_done is False
+    assert id(song1) not in playlist._auto_advanced_ids
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
 
@@ -716,13 +698,13 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
 async def test_a_set_current_song_proceeds_when_auto_advance_done_but_different_song(
     app_mock, song, song1, song2, mocker
 ):
-    """User switches to a different song while _auto_advance_done=True."""
+    """User switches to a different song while _auto_advanced_ids has song1."""
     app_mock.config.ENABLE_MV_AS_STANDBY = 0
     playlist = Playlist(app_mock)
     playlist.add(song)
     playlist.add(song1)
     playlist._current_song = song1
-    playlist._auto_advance_done = True
+    playlist._auto_advanced_ids.add(id(song1))
 
     fake_media = mocker.Mock()
     f = asyncio.Future()
@@ -737,5 +719,42 @@ async def test_a_set_current_song_proceeds_when_auto_advance_done_but_different_
 
     await playlist.a_set_current_song(song2)
 
-    assert playlist._auto_advance_done is True
+    assert id(song1) in playlist._auto_advanced_ids
     mock_set.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_two_consecutive_auto_advances_both_return_early(
+    app_mock, song, song1, song2, mocker
+):
+    """Simulate back-to-back auto-advances: A→B then B→C.
+
+    Both a_set_current_song calls should return early via _auto_advanced_ids,
+    even when current_song has already changed before the first task runs.
+    """
+    app_mock.config.ENABLE_MV_AS_STANDBY = 0
+    playlist = Playlist(app_mock)
+    playlist.add(song)
+    playlist.add(song1)
+    playlist.add(song2)
+
+    mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
+    mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
+
+    # Auto-advance A→B
+    playlist._auto_advanced_ids.add(id(song1))
+    # B→C (before A→B's async task runs); current_song already moved on
+    playlist._current_song = song2
+    playlist._auto_advanced_ids.add(id(song2))
+
+    result_b = await playlist.a_set_current_song(song1)
+    assert result_b is None
+    assert id(song1) not in playlist._auto_advanced_ids
+    assert id(song2) in playlist._auto_advanced_ids
+
+    result_c = await playlist.a_set_current_song(song2)
+    assert result_c is None
+    assert len(playlist._auto_advanced_ids) == 0
+
+    mock_set.assert_not_called()
+    mock_prepare.assert_not_called()
