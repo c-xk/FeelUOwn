@@ -721,7 +721,7 @@ class Playlist:
         if self.mode is PlaylistMode.fm and song not in self._queue:
             self.mode = PlaylistMode.normal
 
-        if self._auto_advance_done:
+        if song == self._current_song and self._auto_advance_done:
             self._auto_advance_done = False
             return None
 

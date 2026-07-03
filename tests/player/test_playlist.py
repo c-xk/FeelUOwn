@@ -698,7 +698,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     playlist = Playlist(app_mock)
     playlist.add(song)
     playlist.add(song1)
-    playlist._current_song = song
+    playlist._current_song = song1
     playlist._auto_advance_done = True
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
@@ -710,3 +710,32 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     assert playlist._auto_advance_done is False
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_set_current_song_proceeds_when_auto_advance_done_but_different_song(
+    app_mock, song, song1, song2, mocker
+):
+    """User switches to a different song while _auto_advance_done=True."""
+    app_mock.config.ENABLE_MV_AS_STANDBY = 0
+    playlist = Playlist(app_mock)
+    playlist.add(song)
+    playlist.add(song1)
+    playlist._current_song = song1
+    playlist._auto_advance_done = True
+
+    fake_media = mocker.Mock()
+    f = asyncio.Future()
+    f.set_result(fake_media)
+    mocker.patch.object(
+        app_mock.task_mgr, 'run_afn_preemptive', return_value=f
+    )
+    mocker.patch.object(
+        MetadataAssembler, 'prepare_for_song', return_value={'k': 'v'}
+    )
+    mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
+
+    await playlist.a_set_current_song(song2)
+
+    assert playlist._auto_advance_done is True
+    mock_set.assert_called_once()
