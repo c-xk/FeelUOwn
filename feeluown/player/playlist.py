@@ -110,13 +110,6 @@ class Playlist:
         self._metadata_mgr = MetadataAssembler(app)
         self._preload_mgr = PreloadManager(self)
 
-        # "source:identifier" -> song repr, for songs auto-advanced via
-        # queued_media_activated.  a_set_current_song for a song in this
-        # dict returns early.  Uses source:identifier rather than id(song)
-        # because the latter can differ across coroutine boundaries (e.g.
-        # during song upgrade / re-fetch).
-        self._auto_advanced_keys: dict[str, str] = {}
-
         #: init playlist mode normal
         self._mode = PlaylistMode.normal
 
@@ -649,14 +642,7 @@ class Playlist:
         with self._queue_lock:
             return self._next_no_lock()
 
-    @staticmethod
-    def _song_auto_key(song):
-        return f'{song.source}:{song.identifier}'
-
     def _on_media_finished(self):
-        # Always call next() — the a_set_current_song task will return
-        # early if the song was already auto-advanced (see
-        # _auto_advanced_keys check).
         self.next()
 
     def _on_queued_media_activated(self, queued_id, media, metadata):
@@ -667,9 +653,7 @@ class Playlist:
                          "not found", queued_id)
             return
         logger.debug("[preload] queued_media_activated: song=%s, "
-                     "queued_id=%s, key=%s", song, queued_id,
-                     self._song_auto_key(song))
-        self._auto_advanced_keys[self._song_auto_key(song)] = repr(song)
+                     "queued_id=%s", song, queued_id)
         with self._queue_lock:
             # If _on_media_finished -> next() already set _current_song, it
             # should be the same song; we still emit song_changed so that
@@ -730,18 +714,12 @@ class Playlist:
         if self.mode is PlaylistMode.fm and song not in self._queue:
             self.mode = PlaylistMode.normal
 
-        key = self._song_auto_key(song)
-        if key in self._auto_advanced_keys:
-            self._auto_advanced_keys.pop(key, None)
+        # State.playing == 2.  Using the literal avoids a circular import
+        # (base_player.py imports Playlist from this module).
+        if song == self._current_song and self._app.player.state == 2:
             logger.debug("[preload] a_set_current_song skip "
-                         "(auto-advanced): %s", song)
+                         "(already playing): %s", song)
             return None
-        if self._auto_advanced_keys:
-            logger.debug(
-                "[preload] a_set_current_song NOT in keys. "
-                "my key=%s, known=%s",
-                key, self._auto_advanced_keys,
-            )
 
         target_song = song  # The song to be set.
         media = None  # The corresponding media to be set.

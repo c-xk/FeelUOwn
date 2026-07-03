@@ -38,6 +38,16 @@ class PreloadManager:
         self.clear_state()
 
     def clear_state(self):
+        if self._preloaded_song is not None or self._preloaded_queued_id is not None:
+            import inspect
+            frame = inspect.currentframe()
+            outer = inspect.getouterframes(frame, 2)
+            caller = outer[1].function if len(outer) > 1 else '?'
+            logger.debug(
+                "[preload] clear_state called by %s: "
+                "song=%s, queued_id=%s",
+                caller, self._preloaded_song, self._preloaded_queued_id,
+            )
         self._preloading_song = None
         self._preloaded_song = None
         self._preloaded_media = None
@@ -62,6 +72,11 @@ class PreloadManager:
             song = self._preloaded_song
             self.clear_state()
             return song
+        logger.debug(
+            "[preload] pop_song_for_queued_id(%s) miss: "
+            "_preloaded_queued_id=%s, _preloaded_song=%s",
+            queued_id, self._preloaded_queued_id, self._preloaded_song,
+        )
         return None
 
     def maybe_preload_next_song(self, force: bool = False):
@@ -76,6 +91,9 @@ class PreloadManager:
             return
 
         if self._preloaded_song is not None and self._preloaded_song != next_song:
+            logger.debug("[preload] maybe_preload: clearing stale preload "
+                         "(_preloaded=%s, next=%s)",
+                         self._preloaded_song, next_song)
             self.clear_state()
 
         if self._preloaded_song == next_song or self._preloading_song == next_song:

@@ -7,7 +7,7 @@ import pytest_asyncio
 from feeluown.library.excs import MediaNotFound
 from feeluown.player import (
     Playlist, PlaylistMode, Player, PlaybackMode,
-    PlaylistRepeatMode, PlaylistShuffleMode, MetadataAssembler
+    PlaylistRepeatMode, PlaylistShuffleMode, MetadataAssembler, State,
 )
 from feeluown.utils.dispatch import Signal
 
@@ -651,7 +651,6 @@ def test_on_queued_media_activated_sets_current_song(
 
     playlist._on_queued_media_activated(5, media, {'k': 'v'})
 
-    assert Playlist._song_auto_key(song1) in playlist._auto_advanced_keys
     assert playlist._current_song == song1
     assert mgr._preloaded_song is None
 
@@ -673,7 +672,7 @@ def test_on_media_finished_calls_next(
 
 
 @pytest.mark.asyncio
-async def test_a_set_current_song_returns_early_when_auto_advance_done(
+async def test_a_set_current_song_returns_early_when_already_playing(
     app_mock, song, song1, mocker
 ):
     app_mock.config.ENABLE_MV_AS_STANDBY = 0
@@ -681,7 +680,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     playlist.add(song)
     playlist.add(song1)
     playlist._current_song = song1
-    playlist._auto_advanced_keys[Playlist._song_auto_key(song1)] = repr(song1)
+    app_mock.player.state = State.playing
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
@@ -689,20 +688,16 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     result = await playlist.a_set_current_song(song1)
 
     assert result is None
-    assert Playlist._song_auto_key(song1) not in playlist._auto_advanced_keys
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_two_consecutive_auto_advances_both_return_early(
+async def test_a_set_current_song_returns_early_when_already_playing_v2(
     app_mock, song, song1, song2, mocker
 ):
-    """Simulate back-to-back auto-advances: A→B then B→C.
-
-    Both a_set_current_song calls should return early via _auto_advanced_ids,
-    even when current_song has already changed before the first task runs.
-    """
+    """Both consecutive auto-advances return early via
+    song == _current_song and state == playing."""
     app_mock.config.ENABLE_MV_AS_STANDBY = 0
     playlist = Playlist(app_mock)
     playlist.add(song)
@@ -711,21 +706,17 @@ async def test_two_consecutive_auto_advances_both_return_early(
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
+    app_mock.player.state = State.playing
 
-    # Auto-advance A→B
-    playlist._auto_advanced_keys[Playlist._song_auto_key(song1)] = repr(song1)
-    # B→C (before A→B's async task runs); current_song already moved on
-    playlist._current_song = song2
-    playlist._auto_advanced_keys[Playlist._song_auto_key(song2)] = repr(song2)
-
+    # Auto-advance A→B: song is current and playing
+    playlist._current_song = song1
     result_b = await playlist.a_set_current_song(song1)
     assert result_b is None
-    assert Playlist._song_auto_key(song1) not in playlist._auto_advanced_keys
-    assert Playlist._song_auto_key(song2) in playlist._auto_advanced_keys
 
+    # Auto-advance B→C
+    playlist._current_song = song2
     result_c = await playlist.a_set_current_song(song2)
     assert result_c is None
-    assert len(playlist._auto_advanced_keys) == 0
 
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
