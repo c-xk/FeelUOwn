@@ -110,6 +110,10 @@ class Playlist:
         self._metadata_mgr = MetadataAssembler(app)
         self._preload_mgr = PreloadManager(self)
 
+        # True when mpv auto-advanced to a queued item (via queued_media_activated).
+        # When set, _on_media_finished skips next() to avoid double-advancing.
+        self._auto_advance_done = False
+
         #: init playlist mode normal
         self._mode = PlaylistMode.normal
 
@@ -178,6 +182,14 @@ class Playlist:
 
         self._app.player.media_finished.connect(self._on_media_finished)
         self.song_changed.connect(self._on_song_changed)
+
+        try:
+            self._app.player.queued_media_activated.connect(
+                self._on_queued_media_activated
+            )
+        except Exception:
+            # Player may not expose queued_media_activated in tests.
+            pass
 
         if self._preload_mgr.threshold_seconds > 0:
             try:
@@ -635,8 +647,27 @@ class Playlist:
             return self._next_no_lock()
 
     def _on_media_finished(self):
-        # Play next model when current media is finished.
+        # When mpv auto-advanced to a queued item, current_song is already
+        # set by _on_queued_media_activated — skip next() to avoid skipping
+        # a track.
+        if self._auto_advance_done:
+            self._auto_advance_done = False
+            return
         self.next()
+
+    def _on_queued_media_activated(self, queued_id, media, metadata):
+        """Handle mpv auto-advancing to a previously queued item."""
+        song = self._preload_mgr.pop_song_for_queued_id(queued_id)
+        if song is None:
+            return
+        self._auto_advance_done = True
+        with self._queue_lock:
+            # If _on_media_finished -> next() already set _current_song, it
+            # should be the same song; we still emit song_changed so that
+            # MV fetch / preload-clear side-effects fire.
+            self._current_song = song
+            self.song_changed.emit(song)
+            self.song_changed_v2.emit(song, media)
 
     def _on_song_changed(self, song):
         self._app.task_mgr.run_afn_preemptive(self._fetch_current_song_mv, song)
@@ -690,11 +721,16 @@ class Playlist:
         if self.mode is PlaylistMode.fm and song not in self._queue:
             self.mode = PlaylistMode.normal
 
+        # When mpv already auto-advanced to *song* via queued_media_activated,
+        # current_song is already set and media is already playing.
+        if song == self._current_song:
+            return None
+
         target_song = song  # The song to be set.
         media = None  # The corresponding media to be set.
 
         # Fast path: reuse preloaded media/metadata.
-        media, metadata = self._preload_mgr.consume_preloaded(song)
+        media, metadata, queued_id = self._preload_mgr.consume_preloaded(song)
         if media is not None:
             self.play_model_stage_changed.emit(PlaylistPlayModelStage.load_media)
             if metadata is None:
@@ -705,7 +741,8 @@ class Playlist:
                     metadata = await self._metadata_mgr.prepare_for_song(target_song)
                 except Exception:
                     metadata = None
-            self.set_current_song_with_media(target_song, media, metadata)
+            self.set_current_song_with_media(target_song, media, metadata,
+                                             queued_id=queued_id)
             return
 
         try:
@@ -793,7 +830,8 @@ class Playlist:
         self._app.show_msg(t("track-standby-unavailable", track=song))
         return song, None
 
-    def set_current_song_with_media(self, song, media, metadata=None):
+    def set_current_song_with_media(self, song, media, metadata=None,
+                                    queued_id=None):
         if song is None:
             self.set_current_song_none()
             return
@@ -801,8 +839,6 @@ class Playlist:
         with self._queue_lock:
             self.insert_after_current_song(song)
             self._current_song = song
-            # TODO: There might be a problem here.
-            # For example, how do we keep `current_song` consistent with `media`?
             self.song_changed.emit(song)
             self.song_changed_v2.emit(song, media)
         if media is None:
@@ -812,8 +848,8 @@ class Playlist:
             kwargs = {}
             if not self._app.has_gui:
                 kwargs["video"] = False
-            # TODO: set artwork field
-            self._app.player.play(media, metadata=metadata, **kwargs)
+            self._app.player.play(media, metadata=metadata, queued_id=queued_id,
+                                  **kwargs)
 
     def set_current_song_none(self):
         """A special case of `set_current_song_with_media`."""

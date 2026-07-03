@@ -1,5 +1,6 @@
 import logging
 from numbers import Real
+from typing import Optional
 from feeluown.library import SongModel
 
 logger = logging.getLogger(__name__)
@@ -9,9 +10,10 @@ class PreloadManager:
     def __init__(self, playlist):
         self._playlist = playlist
         self._preloading_song = None
-        self._preloaded_song = None
+        self._preloaded_song: Optional[SongModel] = None
         self._preloaded_media = None
         self._preloaded_metadata = None
+        self._preloaded_queued_id: Optional[int] = None
         self._threshold_seconds = self._load_threshold_seconds()
 
     @property
@@ -40,14 +42,27 @@ class PreloadManager:
         self._preloaded_song = None
         self._preloaded_media = None
         self._preloaded_metadata = None
+        self._preloaded_queued_id = None
 
     def consume_preloaded(self, song):
         if self._preloaded_song == song and self._preloaded_media is not None:
             media = self._preloaded_media
             metadata = self._preloaded_metadata
+            queued_id = self._preloaded_queued_id
             self.clear_state()
-            return media, metadata
-        return None, None
+            return media, metadata, queued_id
+        return None, None, None
+
+    def pop_song_for_queued_id(self, queued_id: int) -> Optional[SongModel]:
+        """Return the song for *queued_id* and clear preload state.
+
+        Called by Playlist when mpv auto-advances to a queued item.
+        """
+        if self._preloaded_queued_id == queued_id and self._preloaded_song is not None:
+            song = self._preloaded_song
+            self.clear_state()
+            return song
+        return None
 
     def maybe_preload_next_song(self, force: bool = False):
         if self._playlist.current_song is None:
@@ -105,7 +120,10 @@ class PreloadManager:
                 kwargs = {}
                 if not self._playlist._app.has_gui:
                     kwargs["video"] = False
-                self._playlist._app.player.queue_media(media, **kwargs)
+                queued_id = self._playlist._app.player.queue_media(
+                    media, **kwargs
+                )
+                self._preloaded_queued_id = queued_id
             except Exception:
                 logger.debug("queue next media into mpv failed", exc_info=True)
 
