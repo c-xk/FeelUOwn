@@ -6,5 +6,4 @@
         "editor.formatOnSave": false,
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
-    "makefile.configureOnOpen": false,
 }
