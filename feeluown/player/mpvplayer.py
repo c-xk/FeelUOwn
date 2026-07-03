@@ -196,6 +196,8 @@ class MpvPlayer(AbstractPlayer):
             'metadata': metadata,
         }
         self._queued_source_to_id[source] = queued_id
+        logger.debug("[preload] queue_media: queued_id=%s, source=%s, index=%s",
+                     queued_id, source, insert_index)
         return queued_id
 
     def _find_queued_item_by_source(self, source: str) -> tuple[int, dict] | None:
@@ -507,6 +509,7 @@ class MpvPlayer(AbstractPlayer):
         """
         if self._handling_programmatic_play:
             self._handling_programmatic_play = False
+            logger.debug("[preload] START_FILE skipped (programmatic play)")
             return
 
         try:
@@ -520,11 +523,14 @@ class MpvPlayer(AbstractPlayer):
 
         found = self._find_queued_item_by_source(source)
         if found is None:
+            logger.debug("[preload] START_FILE no queued item for %s", source)
             return
 
         queued_id, item = found
         media = item['media']
         metadata = item.get('metadata')
+        logger.debug("[preload] auto-advance detected: queued_id=%s, source=%s",
+                     queued_id, source)
 
         old_media = self._current_media
         self.media_about_to_changed.emit(old_media, media)

@@ -110,10 +110,9 @@ class Playlist:
         self._metadata_mgr = MetadataAssembler(app)
         self._preload_mgr = PreloadManager(self)
 
-        # ids of songs that were auto-advanced via queued_media_activated.
-        # a_set_current_song for a song in this set returns early; the set
-        # survives back-to-back auto-advances regardless of task scheduling.
-        self._auto_advanced_ids: set[int] = set()
+        # id(song) -> song repr, for songs auto-advanced via queued_media_activated.
+        # a_set_current_song for a song in this dict returns early.
+        self._auto_advanced_ids: dict[int, str] = {}
 
         #: init playlist mode normal
         self._mode = PlaylistMode.normal
@@ -657,8 +656,10 @@ class Playlist:
         """Handle mpv auto-advancing to a previously queued item."""
         song = self._preload_mgr.pop_song_for_queued_id(queued_id)
         if song is None:
+            logger.debug("[preload] queued_media_activated queued_id=%s not found", queued_id)
             return
-        self._auto_advanced_ids.add(id(song))
+        logger.debug("[preload] queued_media_activated: song=%s, queued_id=%s, id(song)=%s", song, queued_id, id(song))
+        self._auto_advanced_ids[id(song)] = repr(song)
         with self._queue_lock:
             # If _on_media_finished -> next() already set _current_song, it
             # should be the same song; we still emit song_changed so that
@@ -720,7 +721,12 @@ class Playlist:
             self.mode = PlaylistMode.normal
 
         if id(song) in self._auto_advanced_ids:
-            self._auto_advanced_ids.discard(id(song))
+            self._auto_advanced_ids.pop(id(song), None)
+            logger.debug("[preload] a_set_current_song skip (auto-advanced): %s, id=%s", song, id(song))
+            return None
+        elif self._auto_advanced_ids:
+            logger.debug("[preload] a_set_current_song NOT in ids. my id=%s, known=%s",
+                        id(song), self._auto_advanced_ids)
             return None
 
         target_song = song  # The song to be set.

@@ -93,6 +93,7 @@ class PreloadManager:
                 return
 
         self._preloading_song = next_song
+        logger.debug("[preload] scheduling preload for %s", next_song)
         self._playlist._app.task_mgr.run_afn_preemptive(
             self.preload_next_song,
             next_song,
@@ -108,11 +109,14 @@ class PreloadManager:
                 return
 
             if song != self._playlist.next_song:
+                logger.debug("[preload] song no longer next, abort: %s", song)
                 return
 
             if not media:
+                logger.debug("[preload] no media for %s, abort", song)
                 return
 
+            logger.debug("[preload] media ready for %s", song)
             self._preloaded_song = song
             self._preloaded_media = media
 
@@ -132,6 +136,7 @@ class PreloadManager:
                     media, **kwargs
                 )
                 self._preloaded_queued_id = queued_id
+                logger.debug("[preload] queued media for %s, id=%s", song, queued_id)
             except Exception:
                 logger.debug("queue next media into mpv failed", exc_info=True)
         finally:

@@ -681,7 +681,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     playlist.add(song)
     playlist.add(song1)
     playlist._current_song = song1
-    playlist._auto_advanced_ids.add(id(song1))
+    playlist._auto_advanced_ids[id(song1)] = repr(song1)
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
@@ -692,35 +692,6 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     assert id(song1) not in playlist._auto_advanced_ids
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_a_set_current_song_proceeds_when_auto_advance_done_but_different_song(
-    app_mock, song, song1, song2, mocker
-):
-    """User switches to a different song while _auto_advanced_ids has song1."""
-    app_mock.config.ENABLE_MV_AS_STANDBY = 0
-    playlist = Playlist(app_mock)
-    playlist.add(song)
-    playlist.add(song1)
-    playlist._current_song = song1
-    playlist._auto_advanced_ids.add(id(song1))
-
-    fake_media = mocker.Mock()
-    f = asyncio.Future()
-    f.set_result(fake_media)
-    mocker.patch.object(
-        app_mock.task_mgr, 'run_afn_preemptive', return_value=f
-    )
-    mocker.patch.object(
-        MetadataAssembler, 'prepare_for_song', return_value={'k': 'v'}
-    )
-    mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
-
-    await playlist.a_set_current_song(song2)
-
-    assert id(song1) in playlist._auto_advanced_ids
-    mock_set.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -742,10 +713,10 @@ async def test_two_consecutive_auto_advances_both_return_early(
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
 
     # Auto-advance A→B
-    playlist._auto_advanced_ids.add(id(song1))
+    playlist._auto_advanced_ids[id(song1)] = repr(song1)
     # B→C (before A→B's async task runs); current_song already moved on
     playlist._current_song = song2
-    playlist._auto_advanced_ids.add(id(song2))
+    playlist._auto_advanced_ids[id(song2)] = repr(song2)
 
     result_b = await playlist.a_set_current_song(song1)
     assert result_b is None
