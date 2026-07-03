@@ -38,16 +38,6 @@ class PreloadManager:
         self.clear_state()
 
     def clear_state(self):
-        if self._preloaded_song is not None or self._preloaded_queued_id is not None:
-            import inspect
-            frame = inspect.currentframe()
-            outer = inspect.getouterframes(frame, 2)
-            caller = outer[1].function if len(outer) > 1 else '?'
-            logger.debug(
-                "[preload] clear_state called by %s: "
-                "song=%s, queued_id=%s",
-                caller, self._preloaded_song, self._preloaded_queued_id,
-            )
         self._preloading_song = None
         self._preloaded_song = None
         self._preloaded_media = None
