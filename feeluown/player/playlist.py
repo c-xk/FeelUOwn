@@ -737,9 +737,11 @@ class Playlist:
                          "(auto-advanced): %s", song)
             return None
         if self._auto_advanced_keys:
-            logger.debug("[preload] a_set_current_song NOT in keys. "
-                         "my key=%s, known=%s",
-                        key, self._auto_advanced_keys)
+            logger.debug(
+                "[preload] a_set_current_song NOT in keys. "
+                "my key=%s, known=%s",
+                key, self._auto_advanced_keys,
+            )
 
         target_song = song  # The song to be set.
         media = None  # The corresponding media to be set.
