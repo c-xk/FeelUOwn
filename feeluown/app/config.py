@@ -125,7 +125,7 @@ def create_config() -> Config:
         "PROVIDERS_STANDBY",
         type_=list,
         default=None,
-        desc="",
+        desc=t("providers-standby-desc"),
     )
 
     # YTDL related fields are deprecated since v4.1.9. Disable them by default.
