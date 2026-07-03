@@ -82,8 +82,8 @@ class PreloadManager:
             return
 
         if not force:
-            duration = getattr(self._playlist._app.player, "duration", None)
-            position = getattr(self._playlist._app.player, "position", None)
+            duration = self._playlist._app.player.duration
+            position = self._playlist._app.player.position
             if not isinstance(duration, Real) or duration <= 0:
                 return
             if not isinstance(position, Real) or position < 0:
