@@ -174,7 +174,7 @@ class MpvPlayer(AbstractPlayer):
 
         insert_index = None
         try:
-            playlist_pos = getattr(self._mpv, 'playlist_pos', None)
+            playlist_pos = self._mpv.playlist_pos
             if isinstance(playlist_pos, int) and playlist_pos >= 0:
                 insert_index = playlist_pos + 1
         except Exception:
@@ -213,8 +213,8 @@ class MpvPlayer(AbstractPlayer):
     def discard_queued_media(self):
         """Discard queued items after the current mpv playlist position."""
         try:
-            playlist_pos = getattr(self._mpv, 'playlist_pos', None)
-            playlist_count = getattr(self._mpv, 'playlist_count', None)
+            playlist_pos = self._mpv.playlist_pos
+            playlist_count = self._mpv.playlist_count
             if not isinstance(playlist_pos, int) or not isinstance(playlist_count, int):
                 self._mpv.playlist_clear()
                 self._queued_items.clear()
@@ -271,7 +271,7 @@ class MpvPlayer(AbstractPlayer):
                         self._queued_source_to_id.pop(source, None)
                     self._handling_programmatic_play = True
                     try:
-                        playlist_pos = getattr(self._mpv, 'playlist_pos', None)
+                        playlist_pos = self._mpv.playlist_pos
                         filenames = self._mpv.playlist_filenames
                         try:
                             idx = filenames.index(source)
@@ -513,7 +513,7 @@ class MpvPlayer(AbstractPlayer):
             return
 
         try:
-            playlist_pos = getattr(self._mpv, 'playlist_pos', None)
+            playlist_pos = self._mpv.playlist_pos
             if not isinstance(playlist_pos, int) or playlist_pos < 0:
                 return
             filenames = self._mpv.playlist_filenames
