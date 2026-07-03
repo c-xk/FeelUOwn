@@ -26,9 +26,9 @@ class PreloadManager:
                 self._playlist._app.config.PREFETCH_PLAYLIST_THRESHOLD_SECONDS
             )
         except Exception:
-            cfg_threshold = 30
+            cfg_threshold = 5
         if not isinstance(cfg_threshold, Real):
-            cfg_threshold = 30
+            cfg_threshold = 5
         return float(cfg_threshold)
 
     def on_progress_changed(self, *args, **kwargs):

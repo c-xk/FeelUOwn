@@ -195,7 +195,7 @@ def create_config() -> Config:
     config.deffield(
         "PREFETCH_PLAYLIST_THRESHOLD_SECONDS",
         type_=int,
-        default=30,
+        default=5,
         desc=t("playlist-preload-threshold-seconds-desc"),
     )
     config.deffield(
