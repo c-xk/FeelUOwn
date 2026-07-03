@@ -1,3 +1,4 @@
+from typing import Any
 import locale
 import logging
 import time
@@ -49,10 +50,9 @@ class MpvPlayer(AbstractPlayer):
         super().__init__(**kwargs)
         # https://github.com/cosven/FeelUOwn/issues/246
         locale.setlocale(locale.LC_NUMERIC, 'C')
-        mpvkwargs = {}
+        mpvkwargs: dict[str, Any] = {'prefetch_playlist': prefetch_playlist}
         if winid is not None:
             mpvkwargs['wid'] = winid
-        mpvkwargs['prefetch_playlist'] = prefetch_playlist
         self._version = _mpv_client_api_version()
 
         # From libmpv 0.38, libmpv is not the default vo.
@@ -132,7 +132,7 @@ class MpvPlayer(AbstractPlayer):
     def _prune_playlist_before_current(self):
         """Remove items before current playlist-pos to avoid unbounded growth."""
         try:
-            playlist_pos = getattr(self._mpv, 'playlist_pos', None)
+            playlist_pos = self._mpv.playlist_pos
             if not isinstance(playlist_pos, int) or playlist_pos <= 0:
                 return
             for idx in range(playlist_pos - 1, -1, -1):
@@ -144,7 +144,7 @@ class MpvPlayer(AbstractPlayer):
             return
 
     def queue_media(self, media: Media, video: bool = True,
-                    metadata: dict = None) -> int | None:
+                    metadata: dict | None = None) -> int | None:
         """Queue media into mpv playlist.
 
         Returns a ``queued_id`` on success, or ``None`` if the media cannot
@@ -153,8 +153,6 @@ class MpvPlayer(AbstractPlayer):
         """
         if media is None:
             return None
-        if not isinstance(media, Media):
-            media = Media(media)
         if media.manifest is not None:
             return None
 
@@ -312,10 +310,10 @@ class MpvPlayer(AbstractPlayer):
         self._current_media = media
         self.media_changed.emit(media)
         if metadata is None:
-            self._current_metadata = {}
+            self._current_metadata = Metadata()
         else:
             metadata['__setby__'] = 'manual'
-            self._current_metadata = metadata
+            self._current_metadata = Metadata(metadata)
         self.metadata_changed.emit(self.current_metadata)
 
     def set_infinite_loop(self, on: bool):
@@ -532,9 +530,9 @@ class MpvPlayer(AbstractPlayer):
         self.media_about_to_changed.emit(old_media, media)
         self._current_media = media
         if metadata is None:
-            self._current_metadata = {}
+            self._current_metadata = Metadata()
         else:
-            self._current_metadata = metadata
+            self._current_metadata = Metadata(metadata)
         self.media_changed.emit(media)
         self.metadata_changed.emit(self.current_metadata)
 
