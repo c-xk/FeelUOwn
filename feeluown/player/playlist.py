@@ -110,9 +110,12 @@ class Playlist:
         self._metadata_mgr = MetadataAssembler(app)
         self._preload_mgr = PreloadManager(self)
 
-        # id(song) -> song repr, for songs auto-advanced via queued_media_activated.
-        # a_set_current_song for a song in this dict returns early.
-        self._auto_advanced_ids: dict[int, str] = {}
+        # "source:identifier" -> song repr, for songs auto-advanced via
+        # queued_media_activated.  a_set_current_song for a song in this
+        # dict returns early.  Uses source:identifier rather than id(song)
+        # because the latter can differ across coroutine boundaries (e.g.
+        # during song upgrade / re-fetch).
+        self._auto_advanced_keys: dict[str, str] = {}
 
         #: init playlist mode normal
         self._mode = PlaylistMode.normal
@@ -646,20 +649,27 @@ class Playlist:
         with self._queue_lock:
             return self._next_no_lock()
 
+    @staticmethod
+    def _song_auto_key(song):
+        return f'{song.source}:{song.identifier}'
+
     def _on_media_finished(self):
         # Always call next() — the a_set_current_song task will return
         # early if the song was already auto-advanced (see
-        # _auto_advanced_ids check).
+        # _auto_advanced_keys check).
         self.next()
 
     def _on_queued_media_activated(self, queued_id, media, metadata):
         """Handle mpv auto-advancing to a previously queued item."""
         song = self._preload_mgr.pop_song_for_queued_id(queued_id)
         if song is None:
-            logger.debug("[preload] queued_media_activated queued_id=%s not found", queued_id)
+            logger.debug("[preload] queued_media_activated queued_id=%s "
+                         "not found", queued_id)
             return
-        logger.debug("[preload] queued_media_activated: song=%s, queued_id=%s, id(song)=%s", song, queued_id, id(song))
-        self._auto_advanced_ids[id(song)] = repr(song)
+        logger.debug("[preload] queued_media_activated: song=%s, "
+                     "queued_id=%s, key=%s", song, queued_id,
+                     self._song_auto_key(song))
+        self._auto_advanced_keys[self._song_auto_key(song)] = repr(song)
         with self._queue_lock:
             # If _on_media_finished -> next() already set _current_song, it
             # should be the same song; we still emit song_changed so that
@@ -720,14 +730,16 @@ class Playlist:
         if self.mode is PlaylistMode.fm and song not in self._queue:
             self.mode = PlaylistMode.normal
 
-        if id(song) in self._auto_advanced_ids:
-            self._auto_advanced_ids.pop(id(song), None)
-            logger.debug("[preload] a_set_current_song skip (auto-advanced): %s, id=%s", song, id(song))
+        key = self._song_auto_key(song)
+        if key in self._auto_advanced_keys:
+            self._auto_advanced_keys.pop(key, None)
+            logger.debug("[preload] a_set_current_song skip "
+                         "(auto-advanced): %s", song)
             return None
-        elif self._auto_advanced_ids:
-            logger.debug("[preload] a_set_current_song NOT in ids. my id=%s, known=%s",
-                        id(song), self._auto_advanced_ids)
-            return None
+        if self._auto_advanced_keys:
+            logger.debug("[preload] a_set_current_song NOT in keys. "
+                         "my key=%s, known=%s",
+                        key, self._auto_advanced_keys)
 
         target_song = song  # The song to be set.
         media = None  # The corresponding media to be set.

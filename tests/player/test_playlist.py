@@ -651,7 +651,7 @@ def test_on_queued_media_activated_sets_current_song(
 
     playlist._on_queued_media_activated(5, media, {'k': 'v'})
 
-    assert id(song1) in playlist._auto_advanced_ids
+    assert Playlist._song_auto_key(song1) in playlist._auto_advanced_keys
     assert playlist._current_song == song1
     assert mgr._preloaded_song is None
 
@@ -681,7 +681,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     playlist.add(song)
     playlist.add(song1)
     playlist._current_song = song1
-    playlist._auto_advanced_ids[id(song1)] = repr(song1)
+    playlist._auto_advanced_keys[Playlist._song_auto_key(song1)] = repr(song1)
 
     mock_set = mocker.patch.object(Playlist, 'set_current_song_with_media')
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
@@ -689,7 +689,7 @@ async def test_a_set_current_song_returns_early_when_auto_advance_done(
     result = await playlist.a_set_current_song(song1)
 
     assert result is None
-    assert id(song1) not in playlist._auto_advanced_ids
+    assert Playlist._song_auto_key(song1) not in playlist._auto_advanced_keys
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
 
@@ -713,19 +713,19 @@ async def test_two_consecutive_auto_advances_both_return_early(
     mock_prepare = mocker.patch.object(Playlist, '_prepare_media')
 
     # Auto-advance A→B
-    playlist._auto_advanced_ids[id(song1)] = repr(song1)
+    playlist._auto_advanced_keys[Playlist._song_auto_key(song1)] = repr(song1)
     # B→C (before A→B's async task runs); current_song already moved on
     playlist._current_song = song2
-    playlist._auto_advanced_ids[id(song2)] = repr(song2)
+    playlist._auto_advanced_keys[Playlist._song_auto_key(song2)] = repr(song2)
 
     result_b = await playlist.a_set_current_song(song1)
     assert result_b is None
-    assert id(song1) not in playlist._auto_advanced_ids
-    assert id(song2) in playlist._auto_advanced_ids
+    assert Playlist._song_auto_key(song1) not in playlist._auto_advanced_keys
+    assert Playlist._song_auto_key(song2) in playlist._auto_advanced_keys
 
     result_c = await playlist.a_set_current_song(song2)
     assert result_c is None
-    assert len(playlist._auto_advanced_ids) == 0
+    assert len(playlist._auto_advanced_keys) == 0
 
     mock_set.assert_not_called()
     mock_prepare.assert_not_called()
